@@ -1,0 +1,345 @@
+---
+title: "330 Final Presentation"
+output:
+  xaringan::moon_reader:
+    self_contained: true
+    css: 
+      - default
+      - https://1-2-3.github.io/remark-it/css/nord.css
+      - https://1-2-3.github.io/remark-it/css/nord-dark.css
+      - https://1-2-3.github.io/remark-it/css/nord-light.css
+      - https://1-2-3.github.io/remark-it/css/font-nord.css
+    nature:
+      beforeInit: "https://unpkg.com/wanakana@5.1.0/wanakana.min.js"
+      ratio: '16:9'
+      highlightStyle: github
+      highlightLines: true
+      titleSlideClass: [center, middle]
+      countIncrementalSlides: false
+    seal: false
+---
+
+
+layout: true
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('rt').forEach(function(rt) {
+            rt.innerText = wanakana.toHiragana(rt.innerText);
+        });
+    });
+</script>
+
+<style>
+    .annotation::before {
+        content: "（";
+    }
+    .annotation {
+        font-size-adjust: 0.4;
+    }
+    .annotation::after {
+        content: "）";
+    }
+    .remark-slide-content {
+        font-size: 28px;
+    }
+    .hide-count .remark-slide-number {
+        display: none;
+    }
+    .nord-dark .remark-slide-number {
+        color: white;
+    }
+
+    rt {
+        margin-bottom: 0.1rem;
+    }
+
+    /* https://github.com/gnab/remark/issues/305#issuecomment-403309989 */
+    blockquote::before {
+        content: open-quote;
+        margin-right: 5px;
+        font-size: 1.2em;
+    }
+
+    blockquote {
+        border-left: 0.3em solid #ccc;
+        padding: 0 15px;
+        font-style: italic;
+        color: #ccc;
+        quotes: "「" "」" "『" "』";
+    }
+
+    blockquote::after {
+        content: close-quote;
+        margin-left: 5px;
+        font-size: 1.2em;
+    }
+</style>
+
+```{r setup, include=FALSE}
+library(knitr)
+library(htmltools)
+library(rlang)
+library(tidyverse)
+Sys.setlocale(locale = "Ja_JP.UTF-8")
+
+mecab.yomi <- function(input) {
+    raw.out <- system2(
+        "python",
+        c(
+            "-c",
+            shQuote(
+                paste(
+                    "import base64",
+                    "import sys",
+                    "import MeCab",
+                    "tagger = MeCab.Tagger(\"-O verbose\")",
+                    "res = tagger.parse(sys.argv[1])",
+                    "print(base64.b64encode(res.encode('utf-8')).decode('ascii'))",
+                    sep = "\n"
+                )
+            ),
+            input
+        ),
+        stdout = TRUE
+    )
+    text.out <- rawToChar(base64enc::base64decode(raw.out))
+    out.lines <- unlist(strsplit(text.out, "\n"))
+    ret <- ""
+    for (line in out.lines) {
+        fields <- unlist(strsplit(line, "\t"))
+        for (field in fields) {
+            kv <- unlist(strsplit(field, ":"))
+            if (kv[[1]] == "kana") {
+                ret <- paste(ret, kv[[2]], sep = "")
+            }
+        }
+    }
+    ret
+}
+
+ruby <- function(jpn, furi) {
+    if (missing(furi)) {
+        furi <- mecab.yomi(jpn)
+    }
+    if (knitr::is_html_output()) {
+        return(
+            sprintf(
+                "<ruby>%s<rp>(</rp><rt>%s</rt><rp>)</rp></ruby>",
+                htmlEscape(jpn),
+                htmlEscape(furi)
+            )
+        )
+    }
+    sprintf("%s (%s)", jpn, furi)
+}
+rb <- ruby
+
+annotate <- function(text) {
+    if (knitr::is_html_output()) {
+        return(
+            sprintf(
+                "<span class='annotation'>%s</span>",
+                htmlEscape(text)
+            )
+        )
+    }
+    text
+}
+ann <- annotate
+```
+
+---
+
+class: title-slide, center, middle, nord-dark, hide-count
+count: false
+
+.title[
+    足下に埋もれている命の形
+]
+
+.subtitle[
+    「神様のカルテ」 夏川草介
+]
+
+???
+
+これから、「神様のカルテ」という本を紹介します。
+
+---
+
+class: nord-dark
+
+.title[
+   キャラクター
+]
+
+.pull-left[
+## `r rb("栗原")`先生：３０代
+
+- `r rb("医局")``r ann("大学病院の医師グループ")`✖
+- `r rb("本庄")`病院で勤務五年目
+]
+
+.pull-right[
+## `r rb("安曇")`さん：７０代
+
+- 胆のうがん `r ann("Gallbladder cancer")`
+- 死を前にした
+]
+
+???
+
+「神様のカルテ」のストーリーラインは、最先端の医局に行かなくて本庄病院で働く栗原先生の視点から、二人の死を前にした患者と、病気を治す以外に医者としての意味を探す物語です。私は安曇さんについて話したいと思います。
+
+---
+
+class: nord-dark
+
+.title[
+   <blockquote>病むということは、とても`r rb("孤独")`なことです</blockquote>
+]
+
+.pull-left[
+### 安曇さんの`r rb("苦痛")`
+- 夫がなくなった　３５年前
+  - `r rb("脳溢血")` `r ann("Stroke")`
+- 大学病院で見捨てられた `r ann("Abandoned")`
+]
+
+.pull-right[
+### 安曇さんの大切にするもの
+
+- 栗原先生とスタッフ達
+  - 見捨てられない
+- `r rb("旦那")`さんとの`r rb("記憶")` `r ann("Memories")`
+  - 山見たい
+  - カステラ食べたい
+]
+
+???
+
+本のパンチラインは二つあると思います。一つは患者の安曇さんにとって「病むということは、とても孤独なことです」。
+話の背景は、三十五年前に安曇さんは唯一の家族の夫が脳溢血で亡くなりました。安曇さんは胆のうがんを発見する時には、大学病院に外来患者として行き、偉い先生たちはもう病気の治し方がなくて、残り時間に好きなことをして過ごして、と告げられて、見捨てられた。
+本庄病院の栗原先生が、安曇さんを見捨てないように決意しました。
+安曇さんは旦那さんとの記憶を大切にしています。安曇さんは残り時間にしたいことは二つ：山奥で旦那さんと生活したから山を見たい。旦那さんと東京に行く時食べた文明堂のカステラを食べたい。
+
+---
+
+class: nord-dark
+
+.title[
+   <blockquote>足下に埋もれている命の`r rb("形")`</blockquote>
+]
+
+.pull-left[
+### 医療の配慮
+
+- 大腸に付がん－＞`r rb("下血")` `r ann("Hemorrhage")`
+  - `r rb("輸血")`を受ける `r ann("Transfusion")`
+  - 動くないほうがいい
+  - 食事は`r rb("制限")`される `r ann("Restriction")`
+]
+
+.pull-right[
+### 栗原先生の判断
+
+- 十二月二十日
+  - 安曇さんと屋上に行った
+  - アルプス山を見た
+  - カステラをくれた 
+]
+
+???
+
+がんが大腸に付いたら、下血の危険が大きい。延命措置として下血に対してたくさん輸血して、病室を出られない、カステラも食べない方がいいのがわかる栗原先生は、医者としてその他の方で安曇さんを助けたいと思いました。
+
+
+十二月二十日、栗原先生は安曇さんと病院の屋上に行きました。安曇さんはアルプス山の眺めで、死んだ時は旦那さんからの帽子をかけられたいと栗原先生に伝えた。栗原先生が頷いて、病院の仕事のせいで安曇さんともっと時間を過ごすことが出来なかった。
+
+---
+
+class: nord-dark
+
+.title[
+   <blockquote>お疲れ様、安曇さん</blockquote>
+]
+
+.pull-left[
+### 医療の配慮
+
+- がんが大腸に付く－＞`r rb("下血")`
+  - `r rb("輸血")`を受ける `r ann("Transfusion")`
+  - 動くないほうがいい
+  - 食事は`r rb("制限")`される `r ann("Restriction")`
+]
+
+.pull-right[
+### 結果
+
+
+- 二十二日
+  - `r rb("急変")`した `r ann("Sudden change")`
+  - スタッフ達と一緒に安曇さんを`r rb("見送")`った `r ann("Farewell")`
+]
+
+???
+
+急変の日は、二日後の夜でした。大量下血のせいで血圧が上げられなくなった。栗原先生が看護師たちに「見守ろう、やっと旦那さんに会えるんだ。」と言いました。
+栗原先生が帽子の約束を忘れなかった。帽子をかける時に、一つの手紙が見つかりました。
+
+---
+
+class: nord-dark
+
+.title[
+<blockquote>`r rb("拝啓")`、私の大切な栗原一止大先生様</blockquote>
+]
+
+## 安曇さんの手紙
+
+- 三十年で最もp楽しい時間を過ごせた
+
+???
+
+安曇さんからの手紙でした。
+安曇さんによると、栗原先生のおかげで、夫がなくなってからの三十年で最も楽しい時間を過ごせました。栗原先生はこれから、医者として病気が治らない患者に対して、自分の意味が分かりました。
+
+
+--
+
+- 「病むということは、とても孤独なことだ。」
+
+???
+
+「病むということは、とても孤独なことだ。」安曇さんはそう書いた。
+
+---
+
+class: nord-dark
+count: false
+
+.title[
+<blockquote>`r rb("拝啓")`、私の大切な栗原一止大先生様</blockquote>
+]
+
+## 安曇さんの手紙
+
+- 三十年で最も楽しい時間を過ごせた
+- 「病むということは、とても孤独なことだ。」
+
+<hr/>
+
+.title[
+<blockquote>私は、カステラを買っていってやるのは嫌いではない</blockquote>
+]
+## 栗原先生の考え
+
+- 「人生なるものは、特別な`r rb("才能")` `r ann("skill")`を持って`r rb("魔法")` `r ann("magic")`のように作り出すものではない。足下に埋もれているものではないだろうか」
+
+
+???
+
+「私は、カステラを買っていってやるのは嫌いではない。」
+栗原先生によると、「人生なるものは、特別な才能を持って魔法のように作り出すものではない。足下に埋もれているものではないだろうか」。これが、二つ目のパンチラインだと思います。
+
