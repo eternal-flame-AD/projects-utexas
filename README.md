@@ -23,8 +23,7 @@ It currently includes the following courses, I may post more in the future:
   - [Compiler Vectorization Demo](22fall_SDS335/simple_compiler_vec_optimization.pdf)
   - [Another Integrated Demo](22fall_SDS335/trig_optimization.pdf)
 - [SDS 375](23spring_SDS375/_syllabus.pdf): Data Visualization in R
-  - (soon): A Rust-R two stage pipeline for cluster
-    analysis of horror movie poster patterns. [Rust code base](23spring_SDS375/Project_3/imaging-lib)
+  - [A Rust-R two stage pipeline for cluster analysis of horror movie poster patterns.](23spring_SDS375/Project_3/Cluster%20Analysis%20of%20Horror%20Movie%20Posters.pdf) [Rust code base](23spring_SDS375/Project_3/imaging-lib)
 - [JPN 330](23spring_JPN330/_syllabus.pdf): Practical Readings in Advanced Japanese
   - (soon): Reading presentation [［神様のカルテ］](https://ja.wikipedia.org/wiki/%E7%A5%9E%E6%A7%98%E3%81%AE%E3%82%AB%E3%83%AB%E3%83%86) in [xaringan](https://github.com/yihui/xaringan)
 
