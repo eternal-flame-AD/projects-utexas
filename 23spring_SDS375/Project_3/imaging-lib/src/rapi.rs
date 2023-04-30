@@ -1,12 +1,17 @@
 use std::{
-    ffi::CString,
+    ffi::{c_char, CString},
     fs::{File, OpenOptions},
+    mem::transmute,
     path::Path,
+    ptr,
     str::FromStr,
     sync::Mutex,
 };
 
-use libR_sys::{Rf_asChar, Rf_mkCharCE, Rf_translateCharUTF8, Rf_warning, Rprintf, SEXP};
+use libR_sys::{
+    DllInfo, R_CallMethodDef, R_registerRoutines, R_useDynamicSymbols, Rf_asChar, Rf_mkString,
+    Rf_translateCharUTF8, Rf_warning, Rprintf, SEXP,
+};
 use log::{info, Level, Log};
 
 use crate::{
@@ -66,44 +71,101 @@ impl Log for RLogger {
 
 static mut R_LOGGER: RLogger = RLogger::new();
 
+#[export_name = "R_init_libimaging_lib"]
+#[no_mangle]
+pub extern "C" fn R_init(dllinfo: *mut DllInfo) {
+    unsafe {
+        R_LOGGER.set_max_level(Level::Info);
+        log::set_logger(&R_LOGGER).expect("Failed to set logger.");
+        log::set_max_level(Level::Info.to_level_filter());
+    }
+
+    let call_routines = [
+        R_CallMethodDef {
+            name: "imaging_lib_init\0".as_ptr() as *const c_char,
+            fun: Some(unsafe { transmute(r_img_init as extern "C" fn(RObj) -> SEXP) }),
+            numArgs: 1,
+        },
+        R_CallMethodDef {
+            name: "imaging_lib_download\0".as_ptr() as *const c_char,
+            fun: Some(unsafe {
+                transmute(r_img_download as extern "C" fn(RObj, RObj, RObj, RObj, RObj) -> SEXP)
+            }),
+            numArgs: 5,
+        },
+        R_CallMethodDef {
+            name: "imaging_lib_extract\0".as_ptr() as *const c_char,
+            fun: Some(unsafe {
+                transmute(
+                    r_img_extract
+                        as extern "C" fn(RObj, RObj, RObj, RObj, RObj, RObj, RObj) -> SEXP,
+                )
+            }),
+            numArgs: 7,
+        },
+        R_CallMethodDef {
+            name: ptr::null(),
+            fun: None,
+            numArgs: 0,
+        },
+    ];
+
+    unsafe {
+        R_registerRoutines(
+            dllinfo,
+            ptr::null(),
+            call_routines.as_ptr(),
+            ptr::null(),
+            ptr::null(),
+        );
+
+        R_useDynamicSymbols(dllinfo, 0);
+    }
+
+    info!("libimaging-lib loaded.");
+}
+
 #[export_name = "imaging_lib_init"]
 #[no_mangle]
-pub extern "C" fn r_img_init(log_level: SEXP) -> SEXP {
-    let log_level = parse_r_string(log_level).expect("Failed to parse log level.");
+pub extern "C" fn r_img_init(log_level: RObj) -> SEXP {
+    let log_level: String = log_level.try_into().expect("Failed to convert log level.");
     let log_level = Level::from_str(&log_level).expect("Failed to parse log level.");
 
     unsafe {
         R_LOGGER.set_max_level(log_level);
-        log::set_logger(&R_LOGGER).expect("Failed to set logger.");
         log::set_max_level(log_level.to_level_filter());
     }
 
-    make_r_char("".to_string())
+    make_r_string("".to_string())
 }
 
 #[export_name = "imaging_lib_download"]
 #[no_mangle]
 pub extern "C" fn r_img_download(
-    input_filename: SEXP,
-    output_filename: SEXP,
-    output_zip_filename: SEXP,
-    limit: SEXP,
-    overwrite: SEXP,
+    input_filename: RObj,
+    output_filename: RObj,
+    output_zip_filename: RObj,
+    limit: RObj,
+    overwrite: RObj,
 ) -> SEXP {
-    let input_filename = parse_r_string(input_filename).expect("Failed to parse input filename.");
-    let output_filename =
-        parse_r_string(output_filename).expect("Failed to parse output filename.");
-    let output_zip_filename =
-        parse_r_string(output_zip_filename).expect("Failed to parse output zip filename.");
-    let limit = parse_r_int(limit).expect("Failed to parse limit.");
-    let overwrite = parse_r_bool(overwrite).expect("Failed to parse overwrite.");
+    let input_filename: String = input_filename
+        .try_into()
+        .expect("Failed to convert input filename.");
+    let output_filename: String = output_filename
+        .try_into()
+        .expect("Failed to convert output filename.");
+    let output_zip_filename: String = output_zip_filename
+        .try_into()
+        .expect("Failed to convert output zip filename.");
+    let limit: usize = limit.try_into().expect("Failed to convert limit.");
+    let overwrite: bool = overwrite.try_into().expect("Failed to convert overwrite.");
 
     let csv_input_f = File::open(input_filename).expect("Failed to open input CSV file.");
     let mut csv_input = csv::Reader::from_reader(csv_input_f);
 
     if !overwrite && Path::exists(output_filename.as_ref()) {
         info!("Output CSV file already exists.");
-        return make_r_char("Output CSV file already exists.".to_string());
+        return make_r_string("Output CSV file already exists.".to_string());
     }
 
     let csv_output_f = File::create(output_filename).expect("Failed to create output CSV file.");
@@ -129,36 +191,42 @@ pub extern "C" fn r_img_download(
 
     download_images(&mut csv_input, &mut csv_output, &mut zip_output, limit);
 
-    make_r_char("Finished downloading images.".to_string())
+    make_r_string("Finished downloading images.".to_string())
 }
 
 #[export_name = "imaging_lib_extract"]
 #[no_mangle]
 pub extern "C" fn r_img_extract(
-    input_filename: SEXP,
-    output_filename: SEXP,
-    input_zip_filename: SEXP,
-    num_threads: SEXP,
-    limit: SEXP,
-    overwrite: SEXP,
-    verbose: SEXP,
+    input_filename: RObj,
+    output_filename: RObj,
+    input_zip_filename: RObj,
+    num_threads: RObj,
+    limit: RObj,
+    overwrite: RObj,
+    verbose: RObj,
 ) -> SEXP {
-    let input_filename = parse_r_string(input_filename).expect("Failed to parse input filename.");
-    let output_filename =
-        parse_r_string(output_filename).expect("Failed to parse output filename.");
-    let input_zip_filename =
-        parse_r_string(input_zip_filename).expect("Failed to parse input zip filename.");
-    let num_threads = parse_r_int(num_threads).expect("Failed to parse num_images.");
-    let limit = parse_r_int(limit).expect("Failed to parse limit.");
-    let overwrite = parse_r_bool(overwrite).expect("Failed to parse overwrite.");
-    let verbose = parse_r_bool(verbose).expect("Failed to parse verbose.");
+    let input_filename: String = input_filename
+        .try_into()
+        .expect("Failed to convert input filename.");
+    let output_filename: String = output_filename
+        .try_into()
+        .expect("Failed to convert output filename.");
+    let input_zip_filename: String = input_zip_filename
+        .try_into()
+        .expect("Failed to convert input zip filename.");
+    let num_threads = num_threads
+        .try_into()
+        .expect("Failed to convert num_threads.");
+    let limit = limit.try_into().expect("Failed to convert limit.");
+    let overwrite: bool = overwrite.try_into().expect("Failed to convert overwrite.");
+    let verbose = verbose.try_into().expect("Failed to convert verbose.");
 
     let csv_input_f = File::open(input_filename).expect("Failed to open input CSV file.");
     let mut csv_input = csv::Reader::from_reader(csv_input_f);
 
     if !overwrite && Path::exists(output_filename.as_ref()) {
         info!("Output CSV file already exists.");
-        return make_r_char("Output CSV file already exists.".to_string());
+        return make_r_string("Output CSV file already exists.".to_string());
     }
 
     let csv_output_f = File::create(output_filename).expect("Failed to create output CSV file.");
@@ -181,27 +249,36 @@ pub extern "C" fn r_img_extract(
         verbose,
     );
 
-    make_r_char("Finished extracting features".to_string())
+    make_r_string("Finished extracting features".to_string())
 }
 
-fn make_r_char(r_string: String) -> SEXP {
+fn make_r_string(r_string: String) -> SEXP {
     let c_string = std::ffi::CString::new(r_string).unwrap();
-    unsafe { Rf_mkCharCE(c_string.as_ptr(), libR_sys::cetype_t_CE_UTF8) }
+    unsafe { Rf_mkString(c_string.as_ptr()) }
 }
 
-fn parse_r_string(r_string: SEXP) -> Result<String, Box<dyn std::error::Error>> {
-    let r_string = unsafe { Rf_asChar(r_string) };
-    let c_string = unsafe { Rf_translateCharUTF8(r_string) };
-    let rust_string = unsafe { std::ffi::CStr::from_ptr(c_string).to_str()?.to_owned() };
-    Ok(rust_string)
+#[repr(transparent)]
+pub struct RObj(SEXP);
+
+impl Into<bool> for RObj {
+    fn into(self) -> bool {
+        unsafe { libR_sys::Rf_asLogical(self.0) != 0 }
+    }
 }
 
-fn parse_r_int(r_int: SEXP) -> Result<usize, Box<dyn std::error::Error>> {
-    let rust_int = unsafe { libR_sys::Rf_asInteger(r_int) };
-    Ok(rust_int as usize)
+impl Into<usize> for RObj {
+    fn into(self) -> usize {
+        unsafe { libR_sys::Rf_asInteger(self.0) as usize }
+    }
 }
 
-fn parse_r_bool(r_bool: SEXP) -> Result<bool, Box<dyn std::error::Error>> {
-    let rust_bool = unsafe { libR_sys::Rf_asLogical(r_bool) };
-    Ok(rust_bool != 0)
+impl TryInto<String> for RObj {
+    type Error = Box<dyn std::error::Error>;
+
+    fn try_into(self) -> Result<String, Self::Error> {
+        let r_string = unsafe { Rf_asChar(self.0) };
+        let c_string = unsafe { Rf_translateCharUTF8(r_string) };
+        let rust_string = unsafe { std::ffi::CStr::from_ptr(c_string).to_str()?.to_owned() };
+        Ok(rust_string)
+    }
 }
